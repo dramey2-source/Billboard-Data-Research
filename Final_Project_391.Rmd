@@ -1,0 +1,300 @@
+---
+title: "Final_Project_391"
+author: "Dorian Ramey"
+date: "2026-03-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cars}
+#install.packages("tidytuesdayR")
+
+tuesdata <- tidytuesdayR::tt_load('2025-08-26')
+
+billboard <- tuesdata$billboard
+topics <- tuesdata$topics
+
+billboard <- billboard[, c("song", "artist", "date", "cdr_genre", "weeks_at_number_one", "talent_contestant", "keys", "simplified_key", "bpm", "energy", "danceability", "happiness", "length_sec", "lyrical_topic")]
+
+plot(bpm + energy + danceability + happiness + length_sec~date, billboard)
+model = lm(weeks_at_number_one~bpm+energy+danceability+happiness+length_sec+simplified_key, billboard)
+summary(model)
+plot(weeks_at_number_one~date, billboard)
+plot(weeks_at_number_one~danceability, billboard)
+
+billboard_talent <- billboard[!is.na(billboard$talent_contestant),] 
+
+
+unique(billboard$cdr_genre)
+table(billboard$cdr_genre)
+
+
+
+
+#split most recent decade, first decade
+billboard_recent <- billboard[(billboard$date >= as.Date('2015-01-01')), ]
+plot(bpm~date, billboard_recent)
+
+billboard_early <- billboard[(billboard$date <= as.Date('1968-12-31')), ]
+plot(bpm~date, billboard_recent)
+
+
+```
+
+1. What keeps a song at number one? 
+Has this changed over time?
+--> energy, happiness, date most important factors
+
+2. Can we predict if a song will be a number one hit?
+
+3. Significant world events impact songs at number one
+
+4. Have song factors changed over time? (length, bpm, energy)
+
+```{r features}
+
+#billboard_genre$date <- as.numeric(as.Date(billboard_genre$date) - as.Date("1958-08-04"))
+
+#song length
+length <- lm(length_sec~date, data = billboard)
+print(summary(length))
+plot(length)
+plot(length_sec~date, data=billboard, main="Song Length v. Date")
+
+#transformed song length
+billboard$date <- billboard$date - 12500
+plot(length_sec~abs(date), billboard_genre)
+transformed <- lm(length_sec~abs(date), billboard_genre)
+print(summary(transformed))
+
+#danceability
+dance <- lm(danceability~date, data = billboard)
+print(summary(dance))
+plot(danceability~date, data=billboard, main="Danceability v. Date")
+
+#energy
+energy <- lm(energy~date, data = billboard)
+print(summary(energy))
+plot(energy~date, data=billboard, main="Energy v. Date")
+
+#bpm
+bpm <- lm(bpm~date, data = billboard)
+print(summary(bpm))
+plot(bpm~date, data=billboard, main="BPM v. Date")
+
+
+library(stats)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+billboard_genre$cdr_genre_factors <- factor(billboard_genre$cdr_genre)
+
+dance <- lm(as.numeric(cdr_genre_factors)~date, data = billboard_genre)
+summary(dance)
+plot(dance)
+
+y <- billboard_genre %>% mutate(year = year(date)) %>% group_by(year) %>% summarise(count = n())
+
+y<- as.list(y[, 2])
+nrow(y)
+length(unique(year(billboard_genre$date)))
+
+
+billboard_grouped = data.frame(year = numeric(), genre = character(), count = numeric())
+
+for(year in unique(year(billboard_genre$date))){
+  for(genre in unique(billboard_genre$cdr_genre)){
+    in_year <- billboard_genre[year(billboard_genre$date) == year, ]
+    c =  in_year %>% group_by(cdr_genre) %>% summarise(count = n())
+    billboard_grouped <- rbind(billboard_grouped, data.frame(year = year, genre = genre, count = c))
+  }
+}
+
+billboard_grouped$year
+library(plotly)
+genre_plot <- ggplot(billboard_grouped, aes(x = year, y = count.count, color = count.cdr_genre, text = count.cdr_genre)) + geom_point(size = 3, alpha = 0.7) + labs(x = "Year", y = "Count", title = "Count of Number One Hits of Each Genre per Year")
+
+ggplotly(genre_plot, tooltop = "text")
+
+```
+5. What talent shows yield the most number one hits? Are talent shows an indicator of song success? Have talent shows impacted the demographics of singers with a number one hit? (are talent show winners of different race / gender than the average?)
+--> hypothesis testing, separate into two groups: null = both groups have same demographics, alt = talent show contestants are of diff demographics
+
+6. How have the most popular genres changed over time? What genres are most or least popular?
+
+
+# Optional: Stepwise selection starting from a null model
+which(is.na(billboard[, c("bpm", "energy", "danceability", "happiness", "length_sec", "weeks_at_number_one", "simplified_key", "cdr_genre")]), arr.ind = TRUE)
+
+billboard <- billboard_tal_inc[c(-691, -835), ]
+
+null_model <- lm(log(weeks_at_number_one) ~ 1, data = billboard)  # Intercept only
+full_model <- lm(log(weeks_at_number_one) ~ date + bpm + talent_contestant + energy + danceability + happiness + length_sec + simplified_key, data = billboard, na.action = na.exclude)  # Example full model
+
+# Stepwise selection based on AIC
+best_model <- step(null_model, scope = list(lower = null_model, upper = full_model),
+                   direction = "forward", trace = FALSE)
+
+cat("\nBest model selected by AIC:\n")
+print(summary(best_model))
+
+billboard_genre <- billboard_tal_inc[!is.na(billboard_tal_inc$cdr_genre), ]
+
+for(i in 1:nrow(billboard_genre)){
+  if(grepl("Pop", billboard_genre[i,]$cdr_genre)){
+    billboard_genre[i, ]$cdr_genre = "Pop"
+  } else if(grepl("Rock", billboard_genre[i,]$cdr_genre)){
+    billboard_genre[i, ]$cdr_genre = "Rock"
+  } else if(grepl("Hip Hop", billboard_genre[i, ]$cdr_genre)){
+    billboard_genre[i, ]$cdr_genre = "Hip Hop"
+  } else if(grepl("Folk/Country", billboard_genre[i, ]$cdr_genre)){
+    billboard_genre[i, ]$cdr_genre = "Folk/Country"
+  } else if(grepl("Funk/Soul", billboard_genre[i, ]$cdr_genre)){
+    billboard_genre[i, ]$cdr_genre = "Funk/Soul"
+  } else if(grepl("Electronic/Dance", billboard_genre[i, ]$cdr_genre)){
+    billboard_genre[i, ]$cdr_genre = "Electronic/Dance"
+  } 
+}
+
+
+null_model <- lm(log(weeks_at_number_one) ~ 1, data = billboard_genre)  # Intercept only
+full_model <- lm(log(weeks_at_number_one) ~ date + bpm + talent_contestant + energy + danceability + happiness + length_sec + simplified_key + cdr_genre, data = billboard_genre, na.action = na.exclude)
+
+# Stepwise selection based on AIC
+best_model <- step(null_model, scope = list(lower = null_model, upper = full_model),
+                   direction = "both", trace = FALSE)
+
+best_model_forward <- step(null_model, scope = list(lower = null_model, upper = full_model),
+                   direction = "forward", trace = FALSE)
+
+cat("\nBest model selected by AIC:\n")
+print(summary(best_model_forward))
+print(summary(best_model_forward))
+print(summary(best_model))
+plot(billboard_genre[, c("date", "energy", "happiness", "weeks_at_number_one")])
+plot(best_model)
+plot(log(weeks_at_number_one) ~ 6.55e-01 + 2.790e-05*date, -2.172e-03*energy, billboard_genre)
+
+billboard_genre$date <- as.numeric(as.Date(billboard_genre$date) - as.Date("1958-08-04"))
+
+plot(weeks_at_number_one ~ (date + energy), billboard_genre)
+plot(billboard_genre[, c("date", "weeks_at_number_one", "energy")])
+
+unique(billboard$cdr_genre)
+
+
+```{r full genre labels}
+billboard <- tuesdata$billboard
+
+billboard <- billboard[, c("song", "artist", "date", "cdr_genre", "weeks_at_number_one", "talent_contestant", "keys", "simplified_key", "bpm", "energy", "danceability", "happiness", "length_sec", "lyrical_topic")]
+
+billboard_tal_inc <- billboard
+
+for(i in 1:nrow(billboard_tal_inc)){
+  if(is.na(billboard_tal_inc$talent_contestant[i])){
+    billboard_tal_inc$talent_contestant[i] = 0
+  }else{
+    billboard_tal_inc$talent_contestant[i] = 1
+  }
+}
+
+billboard <- billboard_tal_inc[c(-691, -835), ]
+
+null_model <- lm(log(weeks_at_number_one) ~ 1, data = billboard)  # Intercept only
+full_model <- lm(log(weeks_at_number_one) ~ date + bpm + talent_contestant + energy + danceability + happiness + length_sec + simplified_key, data = billboard, na.action = na.exclude)  # Example full model
+
+# Stepwise selection based on AIC
+best_model <- step(null_model, scope = list(lower = null_model, upper = full_model),
+                   direction = "forward", trace = FALSE)
+print(summary(best_model))
+```
+
+```{r edited genre labels}
+billboard_genre <- billboard_tal_inc[!is.na(billboard_tal_inc$cdr_genre), ]
+
+billboard_genre <- billboard_genre[-which(is.na(billboard_genre)), ]
+billboard_genre <- billboard_genre[c(-691, -835), ]
+
+for(i in 1:nrow(billboard_genre)){
+  if(grepl("Pop", billboard_genre[i,]$cdr_genre)){
+    billboard_genre[i, ]$cdr_genre = "Pop"
+  } else if(grepl("Rock", billboard_genre[i,]$cdr_genre)){
+    billboard_genre[i, ]$cdr_genre = "Rock"
+  } else if(grepl("Hip Hop", billboard_genre[i, ]$cdr_genre)){
+    billboard_genre[i, ]$cdr_genre = "Hip Hop"
+  } else if(grepl("Folk/Country", billboard_genre[i, ]$cdr_genre)){
+    billboard_genre[i, ]$cdr_genre = "Folk/Country"
+  } else if(grepl("Funk/Soul", billboard_genre[i, ]$cdr_genre)){
+    billboard_genre[i, ]$cdr_genre = "Funk/Soul"
+  } else if(grepl("Electronic/Dance", billboard_genre[i, ]$cdr_genre)){
+    billboard_genre[i, ]$cdr_genre = "Electronic/Dance"
+  } 
+}
+which(is.na(billboard_genre$bpm))
+
+null_model <- lm(log(weeks_at_number_one) ~ 1, data = billboard_genre, na.action = na.exclude)  # Intercept only
+
+full_model <- lm(log(weeks_at_number_one) ~ date + bpm + talent_contestant + energy + danceability + happiness + length_sec + cdr_genre, data = billboard_genre, na.action = na.exclude)
+
+# Stepwise selection based on AIC
+best_model <- step(null_model, scope = list(lower = null_model, upper = full_model),direction = "both", trace = FALSE)
+
+best_model_forward <- step(null_model, scope = list(lower = null_model, upper = full_model), direction = "forward", trace = FALSE)
+
+print(summary(best_model_forward))
+print(summary(best_model))
+
+plot(best_model)
+
+```
+
+```{r no genre}
+billboard <- billboard[!is.na(billboard$energy),]
+null_model <- lm(log(weeks_at_number_one) ~ 1, data = billboard)  # Intercept only
+full_model <- lm(log(weeks_at_number_one) ~ date + bpm + talent_contestant + energy + danceability + happiness + length_sec, data = billboard, na.action = na.exclude)
+
+# Stepwise selection based on AIC
+best_model <- step(null_model, scope = list(lower = null_model, upper = full_model),direction = "both", trace = FALSE)
+
+best_model_forward <- step(null_model, scope = list(lower = null_model, upper = full_model), direction = "forward", trace = FALSE)
+
+print(summary(best_model_forward))
+print(summary(best_model))
+plot(billboard_genre[, c("date", "energy", "happiness", "weeks_at_number_one")])
+plot(best_model)
+
+```
+
+
+```{r def genre}
+billboard_genre$cdr_genre_factors = factor(billboard_genre$cdr_genre)
+null_model <- glm(as.numeric(cdr_genre_factors) ~ 1, data = billboard_genre)  # Intercept only
+full_model <- glm(as.numeric(cdr_genre_factors) ~ bpm + energy + danceability + happiness + length_sec + simplified_key, data = billboard_genre, na.action = na.exclude)
+
+# Stepwise selection based on AIC
+best_model <- step(null_model, scope = list(lower = null_model, upper = full_model),
+                   direction = "both", trace = FALSE)
+
+best_model_forward <- step(null_model, scope = list(lower = null_model, upper = full_model),
+                   direction = "forward", trace = FALSE)
+
+print(summary(best_model_forward))
+print(summary(best_model))
+#plot(billboard_genre[, c("date", "energy", "happiness", "weeks_at_number_one")])
+plot(best_model)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
